@@ -5,4 +5,5 @@ Códigos completos en R complementarios de la tesis “El tamaño del efecto com
 ## Estructura
 - R/: scripts por capítulo y medida (cada carpeta contiene un main.R ejecutable).
 - data/: datos simulados (opcional).
-- output/: figuras y tablas generadas por los scripts.
+- output/: no se incluyen figuras en el repositorio; los scripts pueden generarlas si se activa la opción de guardado.
+
