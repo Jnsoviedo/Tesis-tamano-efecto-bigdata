@@ -1,0 +1,1 @@
+Aquí se guardan figuras/tablas generadas por los scripts.
