@@ -1,6 +1,6 @@
 # Tesis-tamano-efecto-bigdata
 
-Códigos completos en R complementarios de la tesis “El tamaño del efecto como medida de significancia en Big Data”.
+Códigos completos en R complementarios de la tesis “El tamaño del efecto como complemento a la significancia estadística en Big Data”.
 
 
 - ## Versión de entrega (jurados)
