@@ -5,7 +5,9 @@ Códigos completos en R complementarios de la tesis “El tamaño del efecto com
 
 - ## Versión de entrega (jurados)
 - Release v2.0 (entrega oficial / descarga): https://github.com/Jnsoviedo/Tesis-tamano-efecto-bigdata/releases/tag/v2.0
-- Scripts en línea (carpeta R/ congelada): https://github.com/Jnsoviedo/Tesis-tamano-efecto-bigdata/tree/v1.0/R
+Scripts en línea (carpeta R/ congelada): https://github.com/Jnsoviedo/Tesis-tamano-efecto-bigdata/tree/v2.0/R
+
+## Estructura
 
 ## Estructura
 - R/: scripts por capítulo y medida (cada carpeta contiene un archivo.R ejecutable).
