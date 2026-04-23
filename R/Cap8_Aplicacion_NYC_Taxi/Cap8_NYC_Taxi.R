@@ -64,10 +64,6 @@ Descripción del problema:
   Se investiga si el TIPO DE PAGO (tarjeta vs. efectivo) está asociado con
   diferencias en tarifa, propina, distancia del viaje y número de pasajeros.
 
-  PROBLEMA CENTRAL: Con n = 40.000.000, cualquier diferencia mínima produce
-  p < 0.001. El p-valor deja de ser informativo. NECESITAMOS el tamaño del
-  efecto para juzgar si la diferencia tiene relevancia práctica.
-
 Fuente:
   NYC TLC Yellow Taxi Trip Records 2024
   URL: https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
@@ -184,7 +180,7 @@ taxi <- taxi_ds |>
   )
 
 N_TOTAL <- nrow(taxi)
-cat(sprintf("\n✅ Datos listos: %s filas cargadas en memoria.\n",
+cat(sprintf("\nDatos listos: %s filas cargadas en memoria.\n",
             format(N_TOTAL, big.mark = ",", decimal.mark = ".")))
 
 # Resumen de las variables clave
@@ -535,6 +531,16 @@ print(A_ic_sup)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4.2.3 GAMMA DE GOODMAN-KRUSKAL (γ) — REQUIERE MUESTRA
+# NOTA DE REPRODUCIBILIDAD:
+#   El valor de gamma depende de la muestra aleatoria extraída. Aunque se
+#   fija la semilla con set.seed(102), el resultado puede variar ligeramente
+#   entre ejecuciones si el orden de las filas del dataset difiere (lo que
+#   puede ocurrir al cargar datos desde Parquet en distintas sesiones).
+#   El valor reportado en el trabajo (γ = 0.0028, IC [-0.0124, 0.0180],
+#   z = 0.363, p = 0.716) fue obtenido con esta configuración.
+#   En cualquier caso, la conclusión sustantiva no cambia: el IC incluye
+#   el cero y no existe evidencia estadística suficiente para rechazar H0,
+#   independientemente de la muestra específica extraída.
 
 N_GAMMA <- 15000
 set.seed(102)
@@ -637,7 +643,7 @@ CAPÍTULO 5 — MEDIDAS DE ASOCIACIÓN ANOVA (N POBLACIONAL = %s)
 VARIABLES:
   pasajeros_f (1 a 6 pasajeros, 6 grupos) × fare_amount (tarifa USD).
 HIPÓTESIS:
-  H0: μ₁ = μ₂ = μ₃ = μ₄ = μ₅ = μ₆  (ningún grupo difiere)
+  H0: ningún grupo difiere
   H1: Al menos un par de medias difiere.
 TODAS LAS MEDIDAS SE CALCULAN SOBRE LA POBLACIÓN COMPLETA.
 ================================================================================
@@ -732,7 +738,7 @@ PREDICTORES           :
   trip_hour        — hora del viaje (0-23)
   payment_type     — tipo de pago (1=tarjeta, 2=efectivo)
 HIPÓTESIS:
-  H0: ningún predictor explica la tarifa)
+  H0: ningún predictor explica la tarifa
   H1: Al menos un predictor es diferente de cero
 ================================================================================
 ", format(N_TOTAL, big.mark = ",")))
@@ -840,5 +846,135 @@ resultados_std <- data.frame(
   ls_OE = round(b_std_OE + 1.96 * se_std_OE, 4))
 print(resultados_std)
 
+# =============================================================================
+# SECCIÓN FINAL — VERIFICACIÓN DE SUPUESTOS (SOLO LO ESENCIAL)
+# =============================================================================
+# NOTA METODOLÓGICA:
+#   Con N > 8 millones, las pruebas formales de hipótesis (Breusch-Pagan)
+#   rechazarán H0 para cualquier desviación mínima e irrelevante, reproduciendo
+#   exactamente el problema del p-valor documentado en este trabajo. Se presentan
+#   únicamente los diagnósticos esenciales: visuales de residuos y VIF.
+#   Los gráficos se generan sobre submuestras de n = 5,000 para agilizar
+#   la ejecución sin perder representatividad visual.
+# =============================================================================
 
+library(lmtest)   # bptest()
+library(car)      # vif()
+library(pROC)     # roc(), auc()
+
+guardar_figuras <- FALSE  # cambiar a TRUE para guardar en output/
+
+# ── CORRELACIÓN DE PEARSON: trip_distance × fare_amount ──────────────────────
+cat("
+================================================================================
+SUPUESTOS — CORRELACIÓN DE PEARSON
+NOTA: Gráfico sobre submuestra n = 5,000 por razones de visualización.
+================================================================================
+")
+
+set.seed(200)
+muestra_pearson <- taxi[sample(1:nrow(taxi), 5000), ]
+
+if (guardar_figuras) {
+  dir.create("output/supuestos_pearson", showWarnings = FALSE, recursive = TRUE)
+  png("output/supuestos_pearson/dispersion.png", width = 800, height = 600)
+}
+plot(muestra_pearson$trip_distance, muestra_pearson$fare_amount,
+     pch = ".", col = rgb(0, 0, 1, 0.3),
+     main = "Dispersión: distancia vs tarifa (n = 5,000)",
+     xlab = "Distancia (millas)", ylab = "Tarifa (USD)")
+abline(lm(fare_amount ~ trip_distance, data = muestra_pearson),
+       col = "red")
+if (guardar_figuras) dev.off()
+
+# ── MODELO LINEAL MÚLTIPLE ────────────────────────────────────────────────────
+cat("
+================================================================================
+SUPUESTOS — MODELO LINEAL MÚLTIPLE
+NOTA: Diagnósticos visuales sobre submuestra n = 5,000.
+================================================================================
+")
+
+res_lm <- residuals(modelo_lm)
+
+# Submuestra para gráficos
+set.seed(300)
+idx_res    <- sample(1:length(res_lm), 5000)
+res_lm_sub <- res_lm[idx_res]
+
+if (guardar_figuras) {
+  dir.create("output/supuestos_lm", showWarnings = FALSE, recursive = TRUE)
+  png("output/supuestos_lm/diagnosticos.png", width = 1200, height = 500)
+}
+par(mfrow = c(1, 2))
+hist(res_lm_sub, breaks = 50,
+     main = "Histograma de residuos (n = 5,000)",
+     xlab = "Residuos", col = "steelblue", border = "white")
+qqnorm(res_lm_sub, main = "QQ-plot de residuos (n = 5,000)")
+qqline(res_lm_sub, col = "red")
+par(mfrow = c(1, 1))
+if (guardar_figuras) dev.off()
+
+# Breusch-Pagan (sobre modelo completo — es rápido)
+cat("
+--- Breusch-Pagan (homocedasticidad) ---
+ADVERTENCIA: Con N > 8 millones este test rechazará H0 para cualquier
+desviación mínima. Interpretar con cautela junto al diagnóstico visual.
+")
+print(bptest(modelo_lm))
+
+# VIF (sobre modelo completo — es rápido)
+cat("
+--- VIF (multicolinealidad) — modelo lineal ---
+Criterio: < 5 sin problema | 5-10 moderado | > 10 grave
+")
+print(vif(modelo_lm))
+
+# ── MODELO LOGÍSTICO BINOMIAL ─────────────────────────────────────────────────
+cat("
+================================================================================
+SUPUESTOS — MODELO LOGÍSTICO BINOMIAL
+================================================================================
+")
+
+# Convergencia
+cat(sprintf("Modelo convergido: %s\n", modelo_logit$converged))
+
+# VIF
+cat("
+--- VIF (multicolinealidad) — modelo logístico ---
+Criterio: < 5 sin problema | 5-10 moderado | > 10 grave
+NOTA: Los valores elevados de trip_distance (14.85) y fare_amount (13.69)
+reflejan la alta correlación entre ambas variables (r = 0.9494, documentada
+en el análisis de correlación de Pearson). Esta multicolinealidad afecta
+la estabilidad individual de los coeficientes pero no invalida las
+predicciones del modelo ni el AUC = 0.9065. En el contexto de este trabajo,
+el objetivo del modelo logístico es ilustrar los coeficientes estandarizados
+beta* como medida de tamaño del efecto, no la inferencia individual de
+cada predictor.
+")
+print(vif(modelo_logit))
+
+# AUC y curva ROC
+cat("
+--- AUC y curva ROC ---
+NOTA: El AUC es una medida de discriminación del modelo. No es una prueba
+de hipótesis y no se ve afectada por el tamaño muestral.
+")
+roc_obj <- roc(response  = taxi$is_tipped,
+               predictor = p_hat,
+               quiet     = TRUE)
+cat(sprintf("\nAUC = %.4f\n", auc(roc_obj)))
+
+if (guardar_figuras) {
+  dir.create("output/supuestos_logit", showWarnings = FALSE, recursive = TRUE)
+  png("output/supuestos_logit/curva_roc.png", width = 800, height = 600)
+}
+plot(roc_obj,
+     main = "Curva ROC — modelo logístico",
+     col  = "#533ab7", lwd = 2)
+legend("bottomright",
+       legend = sprintf("AUC = %.4f", auc(roc_obj)),
+       col = "#533ab7", lwd = 2, bty = "n")
+if (guardar_figuras) dev.off()
 
